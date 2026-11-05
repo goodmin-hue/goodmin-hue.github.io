@@ -1,0 +1,20 @@
+# 의존성
+node_modules/
+
+# 환경 변수 (비밀 키)
+.env
+.env.*
+!.env.example
+
+# 빌드 산출물 (공개 출력 폴더)
+public/
+
+# Netlify 로컬 캐시
+.netlify/
+
+# Kiro 설정·개인 기록
+.kiro/
+
+# OS / 에디터
+.DS_Store
+Thumbs.db

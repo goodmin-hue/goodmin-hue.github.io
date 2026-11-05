@@ -1,0 +1,24 @@
+# Netlify 배포 설정
+
+[build]
+  # 빌드 명령: 공개 자산만 public/ 으로 모은다
+  command = "npm run build"
+  # 공개 출력 폴더 (정적 자산만)
+  publish = "public"
+  # 서버 함수 폴더 (공개 폴더 밖)
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+# /api/* 주소를 Netlify Functions 로 연결
+[[redirects]]
+  from = "/api/guestbook"
+  to = "/.netlify/functions/guestbook"
+  status = 200
+
+# (확장 대비) 그 외 /api/* 도 같은 이름의 함수로 연결
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200

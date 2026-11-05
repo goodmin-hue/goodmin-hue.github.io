@@ -1,0 +1,13 @@
+{
+  "name": "goodmin-hue-homepage",
+  "version": "1.0.0",
+  "description": "김민재 작업 노트 홈페이지 + 짧은 방명록 (Netlify + Supabase)",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  }
+}
