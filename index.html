@@ -7,8 +7,9 @@
   <title>김민재의 작업 노트</title>
   <style>
     :root{
-      --bg:#0f1117; --panel:#171a23; --line:#262b3a;
-      --text:#f2f4f8; --muted:#b4bac8; --accent:#7c9cff;
+      --bg:#f7f8fc; --panel:#ffffff; --line:#d9deea;
+      --text:#1a1f2e; --muted:#51586b; --accent:#2f5bea; --accent-dark:#1e3fb5;
+      --hero1:#2f5bea; --hero2:#6f4be0;
     }
     *{ box-sizing:border-box; }
     html{ scroll-behavior:smooth; scroll-padding-top:72px; }
@@ -18,17 +19,17 @@
       font-family:"Pretendard","Malgun Gothic","Apple SD Gothic Neo",sans-serif;
       line-height:1.75; font-size:1.05rem;
     }
-    a{ color:var(--accent); }
-    a:focus-visible, button:focus-visible{ outline:3px solid #fff; outline-offset:3px; }
+    a{ color:var(--accent-dark); }
+    a:focus-visible, button:focus-visible{ outline:3px solid var(--accent); outline-offset:3px; }
 
     .skip{
-      position:absolute; left:12px; top:-60px; background:var(--accent); color:#111;
+      position:absolute; left:12px; top:-60px; background:var(--accent); color:#fff;
       padding:10px 16px; border-radius:8px; font-weight:700; z-index:20;
     }
     .skip:focus{ top:12px; }
 
     header{
-      position:sticky; top:0; z-index:10; background:#0f1117ee; backdrop-filter:blur(6px);
+      position:sticky; top:0; z-index:10; background:#ffffffee; backdrop-filter:blur(6px);
       border-bottom:1px solid var(--line);
     }
     .bar{
@@ -37,22 +38,53 @@
     }
     .brand{ font-weight:800; color:var(--text); text-decoration:none; }
     nav ul{ display:flex; flex-wrap:wrap; gap:4px 20px; list-style:none; margin:0; padding:0; }
-    nav a{ color:var(--muted); text-decoration:none; padding:4px 0; }
-    nav a:hover{ color:var(--accent); text-decoration:underline; }
+    nav a{ color:var(--muted); text-decoration:none; padding:4px 0; font-weight:600; }
+    nav a:hover{ color:var(--accent-dark); text-decoration:underline; }
 
     main{ max-width:820px; margin:0 auto; padding:0 20px 60px; }
     section{ padding-top:56px; }
-    h1{ font-size:clamp(1.9rem,5vw,2.6rem); line-height:1.3; margin:56px 0 16px; }
-    h2{ font-size:1.5rem; margin:0 0 16px; color:var(--accent); }
+    h2{ font-size:1.5rem; margin:0 0 16px; color:var(--accent-dark); }
     h3{ font-size:1.2rem; margin:0 0 10px; }
     p{ margin:0 0 14px; }
+
+    /* 히어로: 이름을 크게 보여 주는 영역 */
+    .hero{
+      margin:28px 0 8px;
+      background:linear-gradient(135deg,var(--hero1),var(--hero2));
+      color:#fff; border-radius:22px; padding:44px 36px;
+      box-shadow:0 14px 34px rgba(47,91,234,.22);
+    }
+    .hero .eyebrow{ margin:0 0 10px; font-weight:700; letter-spacing:.04em; color:#e7ecff; }
+    .hero .name{
+      margin:0; font-weight:900; line-height:1.1;
+      font-size:clamp(2.6rem,9vw,4.4rem); color:#fff;
+    }
+    .hero .role{ margin:12px 0 0; font-size:clamp(1.05rem,3vw,1.3rem); color:#eef1ff; font-weight:600; }
+    .hero .lead{ margin:18px 0 0; font-size:1.1rem; color:#f3f5ff; max-width:52ch; }
+    .hero .button{ margin-top:22px; background:#fff; color:var(--accent-dark); }
+    .hero .button:hover{ background:#eef1ff; }
+
+    h1{ font-size:clamp(1.6rem,4vw,2rem); line-height:1.3; margin:40px 0 16px; }
     .lead{ color:var(--muted); font-size:1.15rem; }
 
     .button{
-      display:inline-block; background:var(--accent); color:#111; font-weight:800;
+      display:inline-block; background:var(--accent); color:#fff; font-weight:800;
       padding:12px 24px; border-radius:10px; text-decoration:none; margin-top:8px;
+      transition:transform .12s ease, background .12s ease;
     }
-    .button:hover{ transform:translateY(-2px); }
+    .button:hover{ transform:translateY(-2px); background:var(--accent-dark); }
+
+    /* 소개 요약 카드 */
+    .facts{ list-style:none; margin:4px 0 0; padding:0; display:grid; gap:12px;
+      grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); }
+    .facts li{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px 18px; }
+    .facts .k{ display:block; font-size:.85rem; color:var(--muted); font-weight:700; margin-bottom:4px; }
+    .facts .v{ font-weight:700; }
+
+    /* 작업 카드 안 사용 기술 태그 */
+    .tags{ list-style:none; display:flex; flex-wrap:wrap; gap:8px; padding:0; margin:12px 0 0; }
+    .tags li{ font-size:.85rem; font-weight:700; color:var(--accent-dark);
+      background:#eaefff; border:1px solid #c7d3ff; border-radius:999px; padding:3px 12px; }
 
     .work-list{ list-style:none; margin:0; padding:0; display:grid; gap:12px; }
     .work-list a{
@@ -62,7 +94,7 @@
     }
     .work-list a:hover{ border-color:var(--accent); }
     .topic{
-      flex:none; font-size:.85rem; font-weight:600; color:var(--accent);
+      flex:none; font-size:.85rem; font-weight:700; color:var(--accent-dark);
       border:1px solid var(--accent); border-radius:999px; padding:2px 12px;
     }
 
@@ -71,7 +103,7 @@
       padding:24px; margin-top:20px;
     }
     article:target{ border-color:var(--accent); }
-    .status{ color:var(--accent); font-weight:700; }
+    .status{ color:var(--accent-dark); font-weight:700; }
     .back{ display:inline-block; margin-top:6px; font-size:.95rem; }
 
     ul.plain{ padding-left:22px; margin:0; }
@@ -102,8 +134,8 @@
     #gb-submit:disabled{ opacity:.6; cursor:progress; }
 
     .gb-status{ margin:12px 0 0; min-height:1.4em; font-weight:700; }
-    .gb-status.is-error{ color:#ff9a9a; }
-    .gb-status.is-ok{ color:#9af0b0; }
+    .gb-status.is-error{ color:#c0392b; }
+    .gb-status.is-ok{ color:#1e7d46; }
 
     .gb-list-title{ margin-top:28px; }
     .gb-list{ list-style:none; margin:0; padding:0; display:grid; gap:12px; }
@@ -134,19 +166,31 @@
           <li><a href="#now">지금 배우는 것</a></li>
           <li><a href="#links">참고 자료</a></li>
           <li><a href="#contact">연락처</a></li>
+          <li><a href="#guestbook">방명록</a></li>
         </ul>
       </nav>
     </div>
   </header>
 
   <main id="main" tabindex="-1">
-    <h1>요즘 만드는 것들을 모아 둔 작업 노트</h1>
-    <p class="lead">같은 수업 동기가 제가 요즘 하는 작업을 1분 안에 찾아볼 수 있도록 만들었습니다.</p>
-    <a class="button" href="#works">작업 먼저 보기</a>
+    <section class="hero" aria-labelledby="hero-name">
+      <p class="eyebrow">작업 노트 · PORTFOLIO</p>
+      <h1 id="hero-name" class="name">김민재</h1>
+      <p class="role">국민대학교 경영정보학부 1학년 · 데이터와 기술로 문제를 푸는 사람</p>
+      <p class="lead">같은 수업 동기가 제가 요즘 하는 작업을 1분 안에 찾아볼 수 있도록 모아 둔 공간입니다.</p>
+      <a class="button" href="#works">작업 먼저 보기</a>
+    </section>
 
     <section id="about">
       <h2>소개</h2>
       <p>비즈니스 문제를 데이터와 기술로 해결해 보고 싶은 국민대학교 경영정보학부 1학년 김민재입니다. 서비스의 구조와 사용자 경험을 함께 생각하고, 만든 것을 다른 사람이 써 보는 모습을 보며 고쳐 가는 연습을 하고 있습니다.</p>
+      <p>작은 것이라도 직접 만들어 배포하고, 받은 피드백으로 다음에 고칠 한 가지를 정하는 방식으로 공부합니다. 이 홈페이지도 그렇게 만들고 고쳐 가는 중입니다.</p>
+      <ul class="facts">
+        <li><span class="k">소속</span><span class="v">국민대학교 경영정보학부 1학년</span></li>
+        <li><span class="k">관심 분야</span><span class="v">데이터 분석 · 서비스 기획 · 웹</span></li>
+        <li><span class="k">자주 쓰는 도구</span><span class="v">Python · SQL · HTML/CSS · Figma</span></li>
+        <li><span class="k">연락</span><span class="v"><a href="mailto:goodmin@kookmin.ac.kr">goodmin@kookmin.ac.kr</a></span></li>
+      </ul>
     </section>
 
     <section id="works">
@@ -155,19 +199,42 @@
       <ul class="work-list">
         <li><a href="#work-ai">AI 학습 도우미 기획 <span class="topic">AI</span></a></li>
         <li><a href="#work-sales">판매 데이터 대시보드 <span class="topic">데이터</span></a></li>
+        <li><a href="#work-site">이 작업 노트 홈페이지 <span class="topic">웹</span></a></li>
       </ul>
 
       <article id="work-ai">
         <h3>AI 학습 도우미 기획</h3>
         <p class="status">상태: 기획 중</p>
-        <p>학습 효율을 높이기 위한 AI 기반 학습 보조 서비스를 구상하고 있습니다. 화면 흐름은 Figma로 정리합니다.</p>
+        <p>학습 효율을 높이기 위한 AI 기반 학습 보조 서비스를 구상하고 있습니다. 어떤 문제를 누구의 어떤 상황에서 풀어 줄지 먼저 정리하고, 화면 흐름은 Figma로 그려 가며 다듬고 있습니다.</p>
+        <ul class="tags" aria-label="사용 도구">
+          <li>서비스 기획</li>
+          <li>Figma</li>
+        </ul>
         <a class="back" href="#works">작업 목록으로 돌아가기</a>
       </article>
 
       <article id="work-sales">
         <h3>판매 데이터 대시보드</h3>
         <p class="status">상태: 진행 중</p>
-        <p>판매 데이터를 그래프와 표로 보여 주어 판매 흐름을 한눈에 파악하고 결정을 돕는 대시보드를 만들고 있습니다. SQL로 데이터를 뽑아 정리합니다.</p>
+        <p>판매 데이터를 그래프와 표로 보여 주어 판매 흐름을 한눈에 파악하고 결정을 돕는 대시보드를 만들고 있습니다. SQL로 필요한 데이터를 뽑아 정리하고, 어떤 지표를 먼저 보여 줄지 고르는 연습을 함께 하고 있습니다.</p>
+        <ul class="tags" aria-label="사용 도구">
+          <li>SQL</li>
+          <li>데이터 분석</li>
+          <li>데이터 시각화</li>
+        </ul>
+        <a class="back" href="#works">작업 목록으로 돌아가기</a>
+      </article>
+
+      <article id="work-site">
+        <h3>이 작업 노트 홈페이지</h3>
+        <p class="status">상태: 운영 중</p>
+        <p>지금 보고 계신 이 홈페이지도 직접 만들어 배포한 작업입니다. HTML과 CSS로 화면을 만들고 GitHub Pages로 공개했으며, 방문자가 한 줄 응원을 남길 수 있는 방명록은 Netlify Functions와 Supabase로 저장합니다. 받은 피드백(이름이 잘 안 보인다, 화면이 어둡다 등)을 반영해 계속 고쳐 가고 있습니다.</p>
+        <ul class="tags" aria-label="사용 도구">
+          <li>HTML / CSS</li>
+          <li>GitHub Pages</li>
+          <li>Netlify</li>
+          <li>Supabase</li>
+        </ul>
         <a class="back" href="#works">작업 목록으로 돌아가기</a>
       </article>
     </section>
