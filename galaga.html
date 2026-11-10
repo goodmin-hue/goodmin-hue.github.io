@@ -45,6 +45,7 @@
       display:flex; flex-wrap:wrap; gap:8px 20px; align-items:center;
       margin:14px 0 6px; font-weight:700;
     }
+    .hud .level{ color:#8a4bd6; }
     .hud .score{ color:var(--accent-dark); }
     .hud .best{ color:var(--muted); font-weight:600; }
     .hud .lives{ color:#d14b6a; }
@@ -86,6 +87,7 @@
       <canvas id="game" width="480" height="640" aria-label="갤러그 스타일 전투기 슈팅 게임 화면" role="img"></canvas>
 
       <div class="hud">
+        <span class="level">레벨: <span id="level">1</span></span>
         <span class="score">점수: <span id="score">0</span></span>
         <span class="best">최고: <span id="best">0</span></span>
         <span class="lives">기체: <span id="lives">3</span></span>
@@ -119,18 +121,28 @@
       var bestEl = document.getElementById("best");
       var livesEl = document.getElementById("lives");
       var stateEl = document.getElementById("state");
+      var levelEl = document.getElementById("level");
       var startBtn = document.getElementById("start");
       var pauseBtn = document.getElementById("pause");
 
       var BEST_KEY = "galaga_best";
 
       var running = false, paused = false, over = false;
-      var score = 0, lives = 3, wave = 1;
+      var score = 0, lives = 3, level = 1;
       var best = Number(localStorage.getItem(BEST_KEY) || 0);
       bestEl.textContent = best;
 
+      // 적 종류별 설정
+      // grunt: 기본, dasher: 빠른 돌격형, tank: 중장갑, boss: 대형 보스
+      var ENEMY = {
+        grunt:  { w: 34, h: 28, hp: 1, color: "#ff7a6b", score: 10 },
+        dasher: { w: 26, h: 22, hp: 1, color: "#8ff07a", score: 15 },
+        tank:   { w: 44, h: 36, hp: 3, color: "#c79bff", score: 30 },
+        boss:   { w: 120, h: 80, hp: 40, color: "#ff4d6d", score: 300 }
+      };
+
       var player, bullets, enemies, enemyBullets, particles, stars;
-      var keys, touchDir, tick, enemyDir, invuln;
+      var keys, touchDir, tick, enemyDir, invuln, boss, bossTimer;
 
       // ---- 초기화 ----
       function makeStars() {
@@ -157,21 +169,54 @@
         enemyDir = 1;
         invuln = 0;
         over = false;
-        if (full) { score = 0; lives = 3; wave = 1; }
+        boss = null;
+        bossTimer = 0;
+        if (full) { score = 0; lives = 3; level = 1; }
         scoreEl.textContent = score;
         livesEl.textContent = lives;
+        levelEl.textContent = level;
         spawnWave();
       }
 
+      function makeEnemy(type, x, y) {
+        var def = ENEMY[type];
+        return {
+          type: type, x: x, y: y, w: def.w, h: def.h,
+          hp: def.hp, maxhp: def.hp, color: def.color, score: def.score,
+          alive: true, phase: Math.random() * Math.PI * 2
+        };
+      }
+
+      // 레벨마다 편대 구성이 달라지고, 5레벨마다 보스가 나온다
       function spawnWave() {
-        var cols = 6, rows = 3, startX = 60, gapX = 72, startY = 70, gapY = 54;
+        enemies = [];
+        boss = null;
+
+        if (level % 5 === 0) {
+          // 보스 레벨: 대형 전투기 + 소수 호위기
+          boss = makeEnemy("boss", W / 2 - ENEMY.boss.w / 2, 60);
+          enemies.push(boss);
+          for (var g = 0; g < 4; g++) {
+            enemies.push(makeEnemy("grunt", 70 + g * 110, 170));
+          }
+          setState("보스 등장!");
+          return;
+        }
+
+        // 일반 레벨: 레벨이 오를수록 강한 적 비율이 늘어난다
+        var cols = 6, rows = 3, startX = 56, gapX = 74, startY = 66, gapY = 52;
         for (var r = 0; r < rows; r++) {
           for (var c = 0; c < cols; c++) {
-            enemies.push({
-              x: startX + c * gapX, y: startY + r * gapY,
-              w: 34, h: 28, alive: true,
-              row: r, phase: Math.random() * Math.PI * 2
-            });
+            var type = "grunt";
+            var roll = Math.random();
+            // 맨 윗줄은 튼튼한 중장갑형이 섞일 확률
+            if (r === 0 && roll < 0.2 + level * 0.04) type = "tank";
+            // 아랫줄은 빠른 돌격형이 섞일 확률
+            else if (r === rows - 1 && roll < 0.2 + level * 0.05) type = "dasher";
+            var def = ENEMY[type];
+            var x = startX + c * gapX + (ENEMY.grunt.w - def.w) / 2;
+            var y = startY + r * gapY;
+            enemies.push(makeEnemy(type, x, y));
           }
         }
       }
@@ -199,6 +244,31 @@
         bullets.push({ x: player.x - 11, y: player.y - 18, w: 3, h: 20, speed: 9 });
         bullets.push({ x: player.x + 8, y: player.y - 18, w: 3, h: 20, speed: 9 });
         player.cooldown = 10;
+      }
+
+      // 적 레이저 생성 헬퍼 (vx, vy 로 방향 지정)
+      function fireStraight(x, y, speed) {
+        enemyBullets.push({ x: x - 2, y: y, w: 4, h: 14, vx: 0, vy: speed, big: false });
+      }
+      function fireAngled(x, y, angleOffset, speed) {
+        // angleOffset: 아래(+y) 기준 좌우 기울기(라디안 근사)
+        enemyBullets.push({ x: x - 2, y: y, w: 4, h: 12, vx: Math.sin(angleOffset) * speed, vy: Math.cos(angleOffset) * speed, big: false });
+      }
+      // 보스: 부채꼴로 여러 갈래 레이저 발사
+      function fireBossSpread() {
+        if (!boss) return;
+        var cx = boss.x + boss.w / 2, cy = boss.y + boss.h;
+        var count = 5 + Math.min(4, Math.floor(level / 5)); // 레벨 오를수록 갈래 증가
+        var spread = 1.1; // 전체 부채 각(라디안)
+        var speed = 3 + level * 0.1;
+        for (var i = 0; i < count; i++) {
+          var t = count === 1 ? 0 : (i / (count - 1) - 0.5); // -0.5~0.5
+          var ang = t * spread;
+          enemyBullets.push({
+            x: cx - 3, y: cy, w: 6, h: 16,
+            vx: Math.sin(ang) * speed, vy: Math.cos(ang) * speed, big: true
+          });
+        }
       }
 
       function burst(x, y, color) {
@@ -261,55 +331,86 @@
           if (bullets[i].y + bullets[i].h < 0) bullets.splice(i, 1);
         }
 
-        // 적 이동: 천천히 좌우로, 가벼운 물결 흔들림
-        var speedX = 0.35 + wave * 0.08;
+        // 편대(보스 제외) 좌우 이동: 레벨이 오를수록 조금씩 빨라짐
+        var speedX = 0.35 + level * 0.07;
         var hitEdge = false;
         for (var j = 0; j < enemies.length; j++) {
           var en = enemies[j];
-          if (!en.alive) continue;
-          en.x += enemyDir * speedX;
+          if (!en.alive || en.type === "boss") continue;
+          var sp = speedX;
+          if (en.type === "dasher") { en.y += 0.5 + level * 0.05; sp *= 1.6; } // 돌격형은 아래로도 전진
+          en.x += enemyDir * sp;
           if (en.x < 8 || en.x + en.w > W - 8) hitEdge = true;
         }
         if (hitEdge) {
           enemyDir *= -1;
           for (var k = 0; k < enemies.length; k++) {
-            if (enemies[k].alive) enemies[k].y += 12;
+            if (enemies[k].alive && enemies[k].type !== "boss") enemies[k].y += 12;
           }
         }
 
-        // 적 발사: 드물게
-        if (tick % 70 === 0) {
-          var alive = enemies.filter(function (e2) { return e2.alive; });
+        // 보스: 천천히 좌우로 떠다니며 주기적으로 여러 갈래 레이저 발사
+        if (boss && boss.alive) {
+          boss.x += Math.sin(tick * 0.02) * 1.4;
+          boss.x = Math.max(8, Math.min(W - boss.w - 8, boss.x));
+          bossTimer++;
+          var interval = Math.max(45, 90 - level * 2);
+          if (bossTimer >= interval) {
+            bossTimer = 0;
+            fireBossSpread();
+          }
+        }
+
+        // 일반 적 발사: 드물게 (레벨이 오를수록 잦아짐). tank는 추가로 더 쏨
+        var fireEvery = Math.max(28, 70 - level * 3);
+        if (tick % fireEvery === 0) {
+          var alive = enemies.filter(function (e2) { return e2.alive && e2.type !== "boss"; });
           if (alive.length) {
             var sh = alive[Math.floor(Math.random() * alive.length)];
-            enemyBullets.push({ x: sh.x + sh.w / 2 - 2, y: sh.y + sh.h, w: 4, h: 14, speed: 2.6 + wave * 0.15 });
-          }
-        }
-        for (var b = enemyBullets.length - 1; b >= 0; b--) {
-          enemyBullets[b].y += enemyBullets[b].speed;
-          if (enemyBullets[b].y > H) enemyBullets.splice(b, 1);
-        }
-
-        // 내 레이저 vs 적
-        for (var bi = bullets.length - 1; bi >= 0; bi--) {
-          for (var ei = 0; ei < enemies.length; ei++) {
-            var e3 = enemies[ei];
-            if (e3.alive && rectsHit(bullets[bi], e3)) {
-              e3.alive = false;
-              burst(e3.x + e3.w / 2, e3.y + e3.h / 2, "255,120,90");
-              bullets.splice(bi, 1);
-              score += 10;
-              scoreEl.textContent = score;
-              break;
+            fireStraight(sh.x + sh.w / 2, sh.y + sh.h, 2.6 + level * 0.12);
+            if (sh.type === "tank") {
+              // 중장갑형은 좌우로 살짝 벌어진 2발 추가
+              fireAngled(sh.x + sh.w / 2, sh.y + sh.h, -0.25, 2.6);
+              fireAngled(sh.x + sh.w / 2, sh.y + sh.h, 0.25, 2.6);
             }
           }
         }
 
-        // 웨이브 클리어
+        // 적 레이저 이동 (vx, vy)
+        for (var b = enemyBullets.length - 1; b >= 0; b--) {
+          enemyBullets[b].x += enemyBullets[b].vx;
+          enemyBullets[b].y += enemyBullets[b].vy;
+          if (enemyBullets[b].y > H || enemyBullets[b].x < -20 || enemyBullets[b].x > W + 20) {
+            enemyBullets.splice(b, 1);
+          }
+        }
+
+        // 내 레이저 vs 적 (hp 적용)
+        for (var bi = bullets.length - 1; bi >= 0; bi--) {
+          for (var ei = 0; ei < enemies.length; ei++) {
+            var e3 = enemies[ei];
+            if (!e3.alive || !rectsHit(bullets[bi], e3)) continue;
+            var hx = bullets[bi].x;
+            bullets.splice(bi, 1);
+            e3.hp--;
+            burst(hx, e3.y + 6, "255,220,120");
+            if (e3.hp <= 0) {
+              e3.alive = false;
+              burst(e3.x + e3.w / 2, e3.y + e3.h / 2, e3.type === "boss" ? "255,80,110" : "255,120,90");
+              score += e3.score;
+              scoreEl.textContent = score;
+              if (e3 === boss) { boss = null; setState("보스 격파! +" + e3.score); }
+            }
+            break;
+          }
+        }
+
+        // 웨이브 클리어 → 레벨업
         if (enemies.length && enemies.every(function (e4) { return !e4.alive; })) {
           enemies = [];
-          wave++;
-          setState("웨이브 " + wave + " !");
+          level++;
+          levelEl.textContent = level;
+          setState("레벨 " + level + " !");
           spawnWave();
         }
 
@@ -400,35 +501,97 @@
       }
 
       function drawEnemy(e) {
+        if (e.type === "boss") { drawBoss(e); return; }
+        var cx = e.x + e.w / 2, cy = e.y + e.h / 2;
+        var sx = e.w / 34; // 기준 크기(grunt) 대비 스케일
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(sx, sx);
+
+        if (e.type === "dasher") {
+          // 돌격형: 날렵한 화살 모양 (초록)
+          ctx.fillStyle = e.color;
+          ctx.beginPath();
+          ctx.moveTo(0, 14); ctx.lineTo(10, -8); ctx.lineTo(0, -2); ctx.lineTo(-10, -8);
+          ctx.closePath(); ctx.fill();
+          ctx.fillStyle = "#2f7a3a";
+          ctx.beginPath(); ctx.ellipse(0, 2, 2, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+          return;
+        }
+
+        if (e.type === "tank") {
+          // 중장갑형: 넓고 두꺼운 보라 기체
+          ctx.fillStyle = e.color;
+          ctx.beginPath();
+          ctx.moveTo(0, 8); ctx.lineTo(22, -10); ctx.lineTo(9, -10);
+          ctx.lineTo(0, -4); ctx.lineTo(-9, -10); ctx.lineTo(-22, -10);
+          ctx.closePath(); ctx.fill();
+          ctx.fillStyle = "#e7d6ff";
+          ctx.fillRect(-7, -10, 14, 16);
+          ctx.fillStyle = "#5e2f9e";
+          ctx.beginPath(); ctx.ellipse(0, 2, 3, 4.5, 0, 0, Math.PI * 2); ctx.fill();
+          // 남은 체력 힌트(피격 시 색 번짐)
+          if (e.hp < e.maxhp) {
+            ctx.fillStyle = "rgba(255,80,80,0.5)";
+            ctx.fillRect(-10, 8, 20 * (1 - e.hp / e.maxhp), 3);
+          }
+          ctx.restore();
+          return;
+        }
+
+        // 기본(grunt)
+        ctx.fillStyle = e.color;
+        ctx.beginPath();
+        ctx.moveTo(0, 6); ctx.lineTo(18, -8); ctx.lineTo(7, -8);
+        ctx.lineTo(0, -2); ctx.lineTo(-7, -8); ctx.lineTo(-18, -8);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "#ffd36b";
+        ctx.beginPath();
+        ctx.moveTo(0, 15); ctx.lineTo(5, -8); ctx.lineTo(-5, -8);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "#b03a52";
+        ctx.beginPath(); ctx.ellipse(0, 4, 2.4, 4, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+
+      function drawBoss(e) {
         var cx = e.x + e.w / 2, cy = e.y + e.h / 2;
         ctx.save();
         ctx.translate(cx, cy);
-        // 아래를 향한 적 전투기
-        // 날개
-        ctx.fillStyle = "#ff7a6b";
+        // 본체
+        ctx.fillStyle = "#2a0d16";
+        ctx.fillRect(-e.w / 2, -e.h / 2, e.w, e.h);
+        // 장갑 패널
+        ctx.fillStyle = e.color;
         ctx.beginPath();
-        ctx.moveTo(0, 6);
-        ctx.lineTo(18, -8);
-        ctx.lineTo(7, -8);
-        ctx.lineTo(0, -2);
-        ctx.lineTo(-7, -8);
-        ctx.lineTo(-18, -8);
-        ctx.closePath();
-        ctx.fill();
-        // 동체 (아래로 뾰족)
-        ctx.fillStyle = "#ffd36b";
-        ctx.beginPath();
-        ctx.moveTo(0, 15);
-        ctx.lineTo(5, -8);
-        ctx.lineTo(-5, -8);
-        ctx.closePath();
-        ctx.fill();
-        // 콕핏
-        ctx.fillStyle = "#b03a52";
-        ctx.beginPath();
-        ctx.ellipse(0, 4, 2.4, 4, 0, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(0, e.h / 2);
+        ctx.lineTo(e.w / 2, -e.h / 4);
+        ctx.lineTo(e.w / 4, -e.h / 2);
+        ctx.lineTo(-e.w / 4, -e.h / 2);
+        ctx.lineTo(-e.w / 2, -e.h / 4);
+        ctx.closePath(); ctx.fill();
+        // 발광 코어
+        var glow = 10 + Math.sin(tick * 0.2) * 6;
+        ctx.save();
+        ctx.shadowColor = "rgba(255,80,110,0.9)";
+        ctx.shadowBlur = glow;
+        ctx.fillStyle = "#ffd0da";
+        ctx.beginPath(); ctx.ellipse(0, 0, 14, 10, 0, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
+        // 포구 3개
+        ctx.fillStyle = "#ffe08a";
+        ctx.fillRect(-e.w / 2 + 14, e.h / 2 - 6, 8, 6);
+        ctx.fillRect(-4, e.h / 2 - 6, 8, 6);
+        ctx.fillRect(e.w / 2 - 22, e.h / 2 - 6, 8, 6);
+        ctx.restore();
+
+        // 체력바 (상단 중앙)
+        var bw = e.w, bh = 6, bx = e.x, by = e.y - 12;
+        ctx.fillStyle = "rgba(255,255,255,0.25)";
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.fillStyle = "#ff5a7a";
+        ctx.fillRect(bx, by, bw * Math.max(0, e.hp / e.maxhp), bh);
       }
 
       function drawLaser(b, core, glow) {
@@ -455,9 +618,13 @@
           ctx.fillRect(st.x, st.y, st.r, st.r);
         }
 
-        // 적 레이저 (빨강 빔)
+        // 적 레이저: 일반은 빨강, 보스 탄은 분홍 굵은 빔
         for (var i = 0; i < enemyBullets.length; i++) {
-          drawLaser(enemyBullets[i], "#ff5a5a", "rgba(255,90,90,0.9)");
+          if (enemyBullets[i].big) {
+            drawLaser(enemyBullets[i], "#ff86b0", "rgba(255,100,150,0.95)");
+          } else {
+            drawLaser(enemyBullets[i], "#ff5a5a", "rgba(255,90,90,0.9)");
+          }
         }
         // 내 레이저 (청록 빔)
         for (var j = 0; j < bullets.length; j++) {
