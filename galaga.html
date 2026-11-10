@@ -156,6 +156,7 @@
         tick = 0;
         enemyDir = 1;
         invuln = 0;
+        over = false;
         if (full) { score = 0; lives = 3; wave = 1; }
         scoreEl.textContent = score;
         livesEl.textContent = lives;
@@ -180,6 +181,16 @@
       function rectsHit(a, b) {
         return a.x < b.x + b.w && a.x + a.w > b.x &&
                a.y < b.y + b.h && a.y + a.h > b.y;
+      }
+
+      // 플레이어 충돌 박스 (player.x/y 는 중심 기준이라 좌상단으로 변환)
+      function playerBox() {
+        return {
+          x: player.x - player.w / 2,
+          y: player.y - player.h / 2,
+          w: player.w,
+          h: player.h
+        };
       }
 
       function shoot() {
@@ -303,8 +314,9 @@
         }
 
         // 적 레이저 vs 플레이어
+        var pbox = playerBox();
         for (var eb = enemyBullets.length - 1; eb >= 0; eb--) {
-          if (invuln === 0 && rectsHit(enemyBullets[eb], player)) {
+          if (invuln === 0 && rectsHit(enemyBullets[eb], pbox)) {
             enemyBullets.splice(eb, 1);
             hitPlayer();
             return;
@@ -312,7 +324,7 @@
         }
         // 적이 바닥 접근
         for (var ee = 0; ee < enemies.length; ee++) {
-          if (enemies[ee].alive && enemies[ee].y + enemies[ee].h >= player.y - 4) {
+          if (enemies[ee].alive && enemies[ee].y + enemies[ee].h >= pbox.y) {
             hitPlayer();
             return;
           }
