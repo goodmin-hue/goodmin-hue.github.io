@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="김민재의 작업 노트 안에서 즐기는 간단한 갤러그 미니 게임">
+  <meta name="description" content="김민재의 작업 노트 안에서 즐기는 갤러그 스타일 전투기 슈팅 미니 게임">
   <title>갤러그 미니 게임 — 김민재의 작업 노트</title>
   <style>
     :root{
@@ -19,9 +19,7 @@
     a{ color:var(--accent-dark); }
     a:focus-visible, button:focus-visible{ outline:3px solid var(--accent); outline-offset:3px; }
 
-    header{
-      border-bottom:1px solid var(--line); background:#ffffffee;
-    }
+    header{ border-bottom:1px solid var(--line); background:#ffffffee; }
     .bar{
       max-width:720px; margin:0 auto; padding:14px 20px;
       display:flex; justify-content:space-between; align-items:center; gap:16px;
@@ -39,7 +37,7 @@
       padding:18px; box-shadow:0 10px 26px rgba(47,91,234,.12);
     }
     canvas{
-      display:block; width:100%; height:auto; background:#0b1020;
+      display:block; width:100%; height:auto; background:#060814;
       border-radius:12px; touch-action:none;
     }
 
@@ -49,6 +47,8 @@
     }
     .hud .score{ color:var(--accent-dark); }
     .hud .best{ color:var(--muted); font-weight:600; }
+    .hud .lives{ color:#d14b6a; }
+    .hud #state{ color:var(--accent-dark); }
 
     .controls{ display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; }
     .btn{
@@ -80,14 +80,15 @@
 
   <main>
     <h1>갤러그 미니 게임</h1>
-    <p class="lead">아직 만드는 중인 간단한 버전이에요. 우주선을 움직여 적을 맞혀 보세요.</p>
+    <p class="lead">전투기를 조종해 적 편대를 레이저로 격추하세요.</p>
 
     <div class="game-wrap">
-      <canvas id="game" width="480" height="600" aria-label="갤러그 미니 게임 화면" role="img"></canvas>
+      <canvas id="game" width="480" height="640" aria-label="갤러그 스타일 전투기 슈팅 게임 화면" role="img"></canvas>
 
       <div class="hud">
         <span class="score">점수: <span id="score">0</span></span>
         <span class="best">최고: <span id="best">0</span></span>
+        <span class="lives">기체: <span id="lives">3</span></span>
         <span id="state" aria-live="polite"></span>
       </div>
 
@@ -101,10 +102,10 @@
       <h2>조작 방법</h2>
       <ul>
         <li>← → 방향키 또는 A / D : 좌우 이동</li>
-        <li>스페이스바 : 발사</li>
-        <li>휴대폰 : 화면을 좌우로 터치해 이동, 두 번째 손가락 탭으로 발사</li>
+        <li>스페이스바 : 레이저 발사 (꾹 누르면 연사)</li>
+        <li>휴대폰 : 화면을 좌우로 터치해 이동, 두 손가락 탭으로 발사</li>
       </ul>
-      <p class="note">아직 초기 버전이라 적 패턴과 점수 저장 기능은 더 다듬어 갈 예정이에요.</p>
+      <p class="note">기체가 3대 있어요. 적 레이저에 맞거나 적이 바닥까지 내려오면 1대를 잃습니다.</p>
     </section>
   </main>
 
@@ -116,51 +117,65 @@
 
       var scoreEl = document.getElementById("score");
       var bestEl = document.getElementById("best");
+      var livesEl = document.getElementById("lives");
       var stateEl = document.getElementById("state");
       var startBtn = document.getElementById("start");
       var pauseBtn = document.getElementById("pause");
 
       var BEST_KEY = "galaga_best";
 
-      // 게임 상태
       var running = false, paused = false, over = false;
-      var score = 0;
+      var score = 0, lives = 3, wave = 1;
       var best = Number(localStorage.getItem(BEST_KEY) || 0);
       bestEl.textContent = best;
 
-      var player, bullets, enemies, enemyBullets, keys, spawnTimer, enemyDir, tick;
+      var player, bullets, enemies, enemyBullets, particles, stars;
+      var keys, touchDir, tick, enemyDir, invuln;
 
-      function reset() {
-        player = { x: W / 2, y: H - 50, w: 36, h: 20, speed: 5, cooldown: 0 };
+      // ---- 초기화 ----
+      function makeStars() {
+        stars = [];
+        for (var i = 0; i < 70; i++) {
+          stars.push({
+            x: Math.random() * W,
+            y: Math.random() * H,
+            r: Math.random() * 1.6 + 0.4,
+            sp: Math.random() * 0.6 + 0.3
+          });
+        }
+      }
+
+      function reset(full) {
+        player = { x: W / 2, y: H - 64, w: 40, h: 34, speed: 3.2, cooldown: 0 };
         bullets = [];
         enemies = [];
         enemyBullets = [];
+        particles = [];
         keys = {};
-        spawnTimer = 0;
-        enemyDir = 1;
+        touchDir = 0;
         tick = 0;
-        score = 0;
-        over = false;
-        scoreEl.textContent = "0";
+        enemyDir = 1;
+        invuln = 0;
+        if (full) { score = 0; lives = 3; wave = 1; }
+        scoreEl.textContent = score;
+        livesEl.textContent = lives;
         spawnWave();
       }
 
-      // 적 한 줄 생성
       function spawnWave() {
-        var cols = 7, startX = 50, gapX = 60, startY = 60, gapY = 46;
-        var rows = 3;
+        var cols = 6, rows = 3, startX = 60, gapX = 72, startY = 70, gapY = 54;
         for (var r = 0; r < rows; r++) {
           for (var c = 0; c < cols; c++) {
             enemies.push({
-              x: startX + c * gapX,
-              y: startY + r * gapY,
-              w: 30, h: 22, alive: true
+              x: startX + c * gapX, y: startY + r * gapY,
+              w: 34, h: 28, alive: true,
+              row: r, phase: Math.random() * Math.PI * 2
             });
           }
         }
       }
 
-      function setState(text) { stateEl.textContent = text; }
+      function setState(t) { stateEl.textContent = t; }
 
       function rectsHit(a, b) {
         return a.x < b.x + b.w && a.x + a.w > b.x &&
@@ -169,20 +184,31 @@
 
       function shoot() {
         if (player.cooldown > 0) return;
-        bullets.push({ x: player.x - 2, y: player.y - 14, w: 4, h: 12, speed: 8 });
-        player.cooldown = 14;
+        // 좌우 2줄기 레이저
+        bullets.push({ x: player.x - 11, y: player.y - 18, w: 3, h: 20, speed: 9 });
+        bullets.push({ x: player.x + 8, y: player.y - 18, w: 3, h: 20, speed: 9 });
+        player.cooldown = 10;
       }
 
-      // 입력
+      function burst(x, y, color) {
+        for (var i = 0; i < 14; i++) {
+          var ang = Math.random() * Math.PI * 2;
+          var sp = Math.random() * 3 + 1;
+          particles.push({
+            x: x, y: y,
+            vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+            life: 1, color: color
+          });
+        }
+      }
+
+      // ---- 입력 ----
       document.addEventListener("keydown", function (e) {
         if (["ArrowLeft", "ArrowRight", " ", "Spacebar"].indexOf(e.key) !== -1) e.preventDefault();
         keys[e.key] = true;
-        if ((e.key === " " || e.key === "Spacebar") && running && !paused && !over) shoot();
       });
       document.addEventListener("keyup", function (e) { keys[e.key] = false; });
 
-      // 터치: 왼쪽 절반=왼쪽 이동, 오른쪽 절반=오른쪽 이동, 추가 탭=발사
-      var touchDir = 0;
       canvas.addEventListener("touchstart", handleTouch, { passive: false });
       canvas.addEventListener("touchmove", handleTouch, { passive: false });
       canvas.addEventListener("touchend", function (e) {
@@ -199,44 +225,53 @@
         if (e.touches.length >= 2) shoot();
       }
 
+      // ---- 업데이트 ----
       function update() {
         tick++;
         if (player.cooldown > 0) player.cooldown--;
+        if (invuln > 0) invuln--;
 
-        // 플레이어 이동
+        for (var si = 0; si < stars.length; si++) {
+          stars[si].y += stars[si].sp;
+          if (stars[si].y > H) { stars[si].y = 0; stars[si].x = Math.random() * W; }
+        }
+
         var left = keys["ArrowLeft"] || keys["a"] || keys["A"] || touchDir === -1;
         var right = keys["ArrowRight"] || keys["d"] || keys["D"] || touchDir === 1;
         if (left) player.x -= player.speed;
         if (right) player.x += player.speed;
         player.x = Math.max(player.w / 2, Math.min(W - player.w / 2, player.x));
 
-        // 내 총알
+        var firing = keys[" "] || keys["Spacebar"];
+        if (firing) shoot();
+
         for (var i = bullets.length - 1; i >= 0; i--) {
           bullets[i].y -= bullets[i].speed;
           if (bullets[i].y + bullets[i].h < 0) bullets.splice(i, 1);
         }
 
-        // 적 이동 (좌우로 움직이다 벽에 닿으면 한 칸 내려옴)
+        // 적 이동: 천천히 좌우로, 가벼운 물결 흔들림
+        var speedX = 0.35 + wave * 0.08;
         var hitEdge = false;
         for (var j = 0; j < enemies.length; j++) {
           var en = enemies[j];
           if (!en.alive) continue;
-          en.x += enemyDir * (0.6 + score * 0.002);
-          if (en.x < 10 || en.x + en.w > W - 10) hitEdge = true;
+          en.x += enemyDir * speedX;
+          if (en.x < 8 || en.x + en.w > W - 8) hitEdge = true;
         }
         if (hitEdge) {
           enemyDir *= -1;
           for (var k = 0; k < enemies.length; k++) {
-            if (enemies[k].alive) enemies[k].y += 16;
+            if (enemies[k].alive) enemies[k].y += 12;
           }
         }
 
-        // 적 발사 (가끔)
-        if (tick % 45 === 0) {
+        // 적 발사: 드물게
+        if (tick % 70 === 0) {
           var alive = enemies.filter(function (e2) { return e2.alive; });
           if (alive.length) {
-            var shooter = alive[Math.floor(Math.random() * alive.length)];
-            enemyBullets.push({ x: shooter.x + shooter.w / 2 - 2, y: shooter.y + shooter.h, w: 4, h: 10, speed: 3.5 });
+            var sh = alive[Math.floor(Math.random() * alive.length)];
+            enemyBullets.push({ x: sh.x + sh.w / 2 - 2, y: sh.y + sh.h, w: 4, h: 14, speed: 2.6 + wave * 0.15 });
           }
         }
         for (var b = enemyBullets.length - 1; b >= 0; b--) {
@@ -244,12 +279,13 @@
           if (enemyBullets[b].y > H) enemyBullets.splice(b, 1);
         }
 
-        // 충돌: 내 총알 vs 적
+        // 내 레이저 vs 적
         for (var bi = bullets.length - 1; bi >= 0; bi--) {
           for (var ei = 0; ei < enemies.length; ei++) {
             var e3 = enemies[ei];
             if (e3.alive && rectsHit(bullets[bi], e3)) {
               e3.alive = false;
+              burst(e3.x + e3.w / 2, e3.y + e3.h / 2, "255,120,90");
               bullets.splice(bi, 1);
               score += 10;
               scoreEl.textContent = score;
@@ -258,59 +294,177 @@
           }
         }
 
-        // 적 전멸하면 다음 웨이브
-        if (enemies.every(function (e4) { return !e4.alive; })) {
+        // 웨이브 클리어
+        if (enemies.length && enemies.every(function (e4) { return !e4.alive; })) {
           enemies = [];
+          wave++;
+          setState("웨이브 " + wave + " !");
           spawnWave();
         }
 
-        // 충돌: 적 총알 vs 플레이어 / 적이 바닥까지 내려옴 → 게임 오버
-        for (var eb = 0; eb < enemyBullets.length; eb++) {
-          if (rectsHit(enemyBullets[eb], player)) { endGame(); return; }
+        // 적 레이저 vs 플레이어
+        for (var eb = enemyBullets.length - 1; eb >= 0; eb--) {
+          if (invuln === 0 && rectsHit(enemyBullets[eb], player)) {
+            enemyBullets.splice(eb, 1);
+            hitPlayer();
+            return;
+          }
         }
+        // 적이 바닥 접근
         for (var ee = 0; ee < enemies.length; ee++) {
-          if (enemies[ee].alive && enemies[ee].y + enemies[ee].h >= player.y) { endGame(); return; }
+          if (enemies[ee].alive && enemies[ee].y + enemies[ee].h >= player.y - 4) {
+            hitPlayer();
+            return;
+          }
+        }
+
+        // 파티클
+        for (var p = particles.length - 1; p >= 0; p--) {
+          var pt = particles[p];
+          pt.x += pt.vx; pt.y += pt.vy; pt.vy += 0.04; pt.life -= 0.02;
+          if (pt.life <= 0) particles.splice(p, 1);
         }
       }
 
-      function draw() {
-        ctx.fillStyle = "#0b1020";
-        ctx.fillRect(0, 0, W, H);
+      function hitPlayer() {
+        burst(player.x, player.y, "124,156,255");
+        lives--;
+        livesEl.textContent = lives;
+        if (lives <= 0) { endGame(); return; }
+        // 피격 후 잠깐 무적 + 적 레이저 비우기
+        invuln = 90;
+        enemyBullets = [];
+        player.x = W / 2;
+        setState("기체 손상! 남은 기체 " + lives);
+      }
 
-        // 별 배경
-        ctx.fillStyle = "rgba(255,255,255,0.5)";
-        for (var s = 0; s < 40; s++) {
-          var sx = (s * 97) % W;
-          var sy = ((s * 53) + tick) % H;
-          ctx.fillRect(sx, sy, 2, 2);
-        }
+      // ---- 그리기 ----
+      function drawPlayer() {
+        if (invuln > 0 && Math.floor(tick / 5) % 2 === 0) return; // 깜빡임
+        var x = player.x, y = player.y;
+        ctx.save();
+        ctx.translate(x, y);
 
-        // 플레이어 (삼각 우주선)
-        ctx.fillStyle = "#7c9cff";
+        // 엔진 불꽃
+        var flame = 8 + Math.sin(tick * 0.5) * 4;
+        var g = ctx.createLinearGradient(0, 10, 0, 10 + flame);
+        g.addColorStop(0, "rgba(255,210,120,0.9)");
+        g.addColorStop(1, "rgba(255,90,60,0)");
+        ctx.fillStyle = g;
         ctx.beginPath();
-        ctx.moveTo(player.x, player.y - player.h / 2);
-        ctx.lineTo(player.x - player.w / 2, player.y + player.h / 2);
-        ctx.lineTo(player.x + player.w / 2, player.y + player.h / 2);
+        ctx.moveTo(-5, 10); ctx.lineTo(5, 10); ctx.lineTo(0, 10 + flame);
+        ctx.closePath(); ctx.fill();
+
+        // 동체
+        ctx.fillStyle = "#cfe0ff";
+        ctx.beginPath();
+        ctx.moveTo(0, -18);
+        ctx.lineTo(5, 6);
+        ctx.lineTo(-5, 6);
         ctx.closePath();
         ctx.fill();
+        // 주 날개
+        ctx.fillStyle = "#6f9bff";
+        ctx.beginPath();
+        ctx.moveTo(0, -4);
+        ctx.lineTo(20, 10);
+        ctx.lineTo(8, 10);
+        ctx.lineTo(0, 4);
+        ctx.lineTo(-8, 10);
+        ctx.lineTo(-20, 10);
+        ctx.closePath();
+        ctx.fill();
+        // 꼬리 날개
+        ctx.fillStyle = "#3f6fe0";
+        ctx.beginPath();
+        ctx.moveTo(0, 2); ctx.lineTo(7, 12); ctx.lineTo(-7, 12);
+        ctx.closePath(); ctx.fill();
+        // 콕핏
+        ctx.fillStyle = "#eaf1ff";
+        ctx.beginPath();
+        ctx.ellipse(0, -8, 2.6, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
 
-        // 내 총알
-        ctx.fillStyle = "#ffffff";
-        bullets.forEach(function (b) { ctx.fillRect(b.x, b.y, b.w, b.h); });
+      function drawEnemy(e) {
+        var cx = e.x + e.w / 2, cy = e.y + e.h / 2;
+        ctx.save();
+        ctx.translate(cx, cy);
+        // 아래를 향한 적 전투기
+        // 날개
+        ctx.fillStyle = "#ff7a6b";
+        ctx.beginPath();
+        ctx.moveTo(0, 6);
+        ctx.lineTo(18, -8);
+        ctx.lineTo(7, -8);
+        ctx.lineTo(0, -2);
+        ctx.lineTo(-7, -8);
+        ctx.lineTo(-18, -8);
+        ctx.closePath();
+        ctx.fill();
+        // 동체 (아래로 뾰족)
+        ctx.fillStyle = "#ffd36b";
+        ctx.beginPath();
+        ctx.moveTo(0, 15);
+        ctx.lineTo(5, -8);
+        ctx.lineTo(-5, -8);
+        ctx.closePath();
+        ctx.fill();
+        // 콕핏
+        ctx.fillStyle = "#b03a52";
+        ctx.beginPath();
+        ctx.ellipse(0, 4, 2.4, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawLaser(b, core, glow) {
+        ctx.save();
+        ctx.shadowColor = glow;
+        ctx.shadowBlur = 12;
+        ctx.fillStyle = core;
+        ctx.fillRect(b.x, b.y, b.w, b.h);
+        ctx.restore();
+      }
+
+      function draw() {
+        // 배경 그라데이션
+        var bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, "#0a1230");
+        bg.addColorStop(1, "#050711");
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+
+        // 별
+        for (var s = 0; s < stars.length; s++) {
+          var st = stars[s];
+          ctx.fillStyle = "rgba(255,255,255," + (0.3 + st.r * 0.35) + ")";
+          ctx.fillRect(st.x, st.y, st.r, st.r);
+        }
+
+        // 적 레이저 (빨강 빔)
+        for (var i = 0; i < enemyBullets.length; i++) {
+          drawLaser(enemyBullets[i], "#ff5a5a", "rgba(255,90,90,0.9)");
+        }
+        // 내 레이저 (청록 빔)
+        for (var j = 0; j < bullets.length; j++) {
+          drawLaser(bullets[j], "#8ffcff", "rgba(120,220,255,0.9)");
+        }
 
         // 적
-        enemies.forEach(function (e) {
-          if (!e.alive) return;
-          ctx.fillStyle = "#ff6b8b";
-          ctx.fillRect(e.x, e.y, e.w, e.h);
-          ctx.fillStyle = "#ffd36b";
-          ctx.fillRect(e.x + 6, e.y + 6, 6, 6);
-          ctx.fillRect(e.x + e.w - 12, e.y + 6, 6, 6);
-        });
+        for (var k = 0; k < enemies.length; k++) {
+          if (enemies[k].alive) drawEnemy(enemies[k]);
+        }
 
-        // 적 총알
-        ctx.fillStyle = "#ffd36b";
-        enemyBullets.forEach(function (b) { ctx.fillRect(b.x, b.y, b.w, b.h); });
+        // 파티클
+        for (var p = 0; p < particles.length; p++) {
+          var pt = particles[p];
+          ctx.fillStyle = "rgba(" + pt.color + "," + Math.max(0, pt.life) + ")";
+          ctx.fillRect(pt.x, pt.y, 3, 3);
+        }
+
+        drawPlayer();
       }
 
       function loop() {
@@ -320,7 +474,7 @@
       }
 
       function startGame() {
-        reset();
+        reset(true);
         running = true; paused = false;
         startBtn.textContent = "다시 시작";
         pauseBtn.disabled = false;
@@ -354,10 +508,12 @@
       startBtn.addEventListener("click", startGame);
       pauseBtn.addEventListener("click", togglePause);
 
-      // 시작 전 안내 화면 한 번 그리기
-      reset();
+      // 시작 전 안내 화면
+      makeStars();
+      reset(true);
+      running = false;
       draw();
-      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
       ctx.font = "bold 20px sans-serif";
       ctx.textAlign = "center";
       ctx.fillText("게임 시작을 눌러 주세요", W / 2, H / 2);
