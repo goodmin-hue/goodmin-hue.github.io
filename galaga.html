@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="김민재의 작업 노트 안에서 즐기는 간단한 갤러그 미니 게임">
+  <title>갤러그 미니 게임 — 김민재의 작업 노트</title>
+  <style>
+    :root{
+      --bg:#f7f8fc; --panel:#ffffff; --line:#d9deea;
+      --text:#1a1f2e; --muted:#51586b; --accent:#2f5bea; --accent-dark:#1e3fb5;
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0; background:var(--bg); color:var(--text);
+      font-family:"Pretendard","Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+      line-height:1.7;
+    }
+    a{ color:var(--accent-dark); }
+    a:focus-visible, button:focus-visible{ outline:3px solid var(--accent); outline-offset:3px; }
+
+    header{
+      border-bottom:1px solid var(--line); background:#ffffffee;
+    }
+    .bar{
+      max-width:720px; margin:0 auto; padding:14px 20px;
+      display:flex; justify-content:space-between; align-items:center; gap:16px;
+    }
+    .brand{ font-weight:800; color:var(--text); text-decoration:none; }
+    .bar a.back{ color:var(--muted); text-decoration:none; font-weight:600; }
+    .bar a.back:hover{ color:var(--accent-dark); text-decoration:underline; }
+
+    main{ max-width:720px; margin:0 auto; padding:28px 20px 60px; }
+    h1{ font-size:clamp(1.8rem,5vw,2.4rem); margin:0 0 6px; }
+    .lead{ color:var(--muted); margin:0 0 20px; }
+
+    .game-wrap{
+      background:var(--panel); border:1px solid var(--line); border-radius:18px;
+      padding:18px; box-shadow:0 10px 26px rgba(47,91,234,.12);
+    }
+    canvas{
+      display:block; width:100%; height:auto; background:#0b1020;
+      border-radius:12px; touch-action:none;
+    }
+
+    .hud{
+      display:flex; flex-wrap:wrap; gap:8px 20px; align-items:center;
+      margin:14px 0 6px; font-weight:700;
+    }
+    .hud .score{ color:var(--accent-dark); }
+    .hud .best{ color:var(--muted); font-weight:600; }
+
+    .controls{ display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; }
+    .btn{
+      display:inline-block; border:none; cursor:pointer; font:inherit; font-weight:800;
+      background:var(--accent); color:#fff; padding:11px 22px; border-radius:10px;
+      transition:transform .12s ease, background .12s ease;
+    }
+    .btn:hover{ transform:translateY(-2px); background:var(--accent-dark); }
+    .btn.secondary{ background:var(--panel); color:var(--accent-dark); border:1px solid var(--accent); }
+    .btn.secondary:hover{ background:#eef1ff; }
+
+    .how{
+      margin-top:22px; background:var(--panel); border:1px solid var(--line);
+      border-radius:14px; padding:18px 20px;
+    }
+    .how h2{ font-size:1.1rem; margin:0 0 10px; color:var(--accent-dark); }
+    .how ul{ margin:0; padding-left:20px; }
+    .how li{ margin-bottom:6px; }
+    .note{ color:var(--muted); font-size:.95rem; margin-top:16px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <a class="brand" href="./index.html">김민재의 작업 노트</a>
+      <a class="back" href="./index.html#work-galaga">← 작업 설명으로 돌아가기</a>
+    </div>
+  </header>
+
+  <main>
+    <h1>갤러그 미니 게임</h1>
+    <p class="lead">아직 만드는 중인 간단한 버전이에요. 우주선을 움직여 적을 맞혀 보세요.</p>
+
+    <div class="game-wrap">
+      <canvas id="game" width="480" height="600" aria-label="갤러그 미니 게임 화면" role="img"></canvas>
+
+      <div class="hud">
+        <span class="score">점수: <span id="score">0</span></span>
+        <span class="best">최고: <span id="best">0</span></span>
+        <span id="state" aria-live="polite"></span>
+      </div>
+
+      <div class="controls">
+        <button id="start" class="btn" type="button">게임 시작</button>
+        <button id="pause" class="btn secondary" type="button" disabled>일시정지</button>
+      </div>
+    </div>
+
+    <section class="how">
+      <h2>조작 방법</h2>
+      <ul>
+        <li>← → 방향키 또는 A / D : 좌우 이동</li>
+        <li>스페이스바 : 발사</li>
+        <li>휴대폰 : 화면을 좌우로 터치해 이동, 두 번째 손가락 탭으로 발사</li>
+      </ul>
+      <p class="note">아직 초기 버전이라 적 패턴과 점수 저장 기능은 더 다듬어 갈 예정이에요.</p>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      var canvas = document.getElementById("game");
+      var ctx = canvas.getContext("2d");
+      var W = canvas.width, H = canvas.height;
+
+      var scoreEl = document.getElementById("score");
+      var bestEl = document.getElementById("best");
+      var stateEl = document.getElementById("state");
+      var startBtn = document.getElementById("start");
+      var pauseBtn = document.getElementById("pause");
+
+      var BEST_KEY = "galaga_best";
+
+      // 게임 상태
+      var running = false, paused = false, over = false;
+      var score = 0;
+      var best = Number(localStorage.getItem(BEST_KEY) || 0);
+      bestEl.textContent = best;
+
+      var player, bullets, enemies, enemyBullets, keys, spawnTimer, enemyDir, tick;
+
+      function reset() {
+        player = { x: W / 2, y: H - 50, w: 36, h: 20, speed: 5, cooldown: 0 };
+        bullets = [];
+        enemies = [];
+        enemyBullets = [];
+        keys = {};
+        spawnTimer = 0;
+        enemyDir = 1;
+        tick = 0;
+        score = 0;
+        over = false;
+        scoreEl.textContent = "0";
+        spawnWave();
+      }
+
+      // 적 한 줄 생성
+      function spawnWave() {
+        var cols = 7, startX = 50, gapX = 60, startY = 60, gapY = 46;
+        var rows = 3;
+        for (var r = 0; r < rows; r++) {
+          for (var c = 0; c < cols; c++) {
+            enemies.push({
+              x: startX + c * gapX,
+              y: startY + r * gapY,
+              w: 30, h: 22, alive: true
+            });
+          }
+        }
+      }
+
+      function setState(text) { stateEl.textContent = text; }
+
+      function rectsHit(a, b) {
+        return a.x < b.x + b.w && a.x + a.w > b.x &&
+               a.y < b.y + b.h && a.y + a.h > b.y;
+      }
+
+      function shoot() {
+        if (player.cooldown > 0) return;
+        bullets.push({ x: player.x - 2, y: player.y - 14, w: 4, h: 12, speed: 8 });
+        player.cooldown = 14;
+      }
+
+      // 입력
+      document.addEventListener("keydown", function (e) {
+        if (["ArrowLeft", "ArrowRight", " ", "Spacebar"].indexOf(e.key) !== -1) e.preventDefault();
+        keys[e.key] = true;
+        if ((e.key === " " || e.key === "Spacebar") && running && !paused && !over) shoot();
+      });
+      document.addEventListener("keyup", function (e) { keys[e.key] = false; });
+
+      // 터치: 왼쪽 절반=왼쪽 이동, 오른쪽 절반=오른쪽 이동, 추가 탭=발사
+      var touchDir = 0;
+      canvas.addEventListener("touchstart", handleTouch, { passive: false });
+      canvas.addEventListener("touchmove", handleTouch, { passive: false });
+      canvas.addEventListener("touchend", function (e) {
+        e.preventDefault();
+        if (e.touches.length === 0) touchDir = 0;
+      }, { passive: false });
+      function handleTouch(e) {
+        e.preventDefault();
+        if (!running || paused || over) return;
+        var rect = canvas.getBoundingClientRect();
+        var t = e.touches[0];
+        var x = (t.clientX - rect.left) / rect.width * W;
+        touchDir = x < W / 2 ? -1 : 1;
+        if (e.touches.length >= 2) shoot();
+      }
+
+      function update() {
+        tick++;
+        if (player.cooldown > 0) player.cooldown--;
+
+        // 플레이어 이동
+        var left = keys["ArrowLeft"] || keys["a"] || keys["A"] || touchDir === -1;
+        var right = keys["ArrowRight"] || keys["d"] || keys["D"] || touchDir === 1;
+        if (left) player.x -= player.speed;
+        if (right) player.x += player.speed;
+        player.x = Math.max(player.w / 2, Math.min(W - player.w / 2, player.x));
+
+        // 내 총알
+        for (var i = bullets.length - 1; i >= 0; i--) {
+          bullets[i].y -= bullets[i].speed;
+          if (bullets[i].y + bullets[i].h < 0) bullets.splice(i, 1);
+        }
+
+        // 적 이동 (좌우로 움직이다 벽에 닿으면 한 칸 내려옴)
+        var hitEdge = false;
+        for (var j = 0; j < enemies.length; j++) {
+          var en = enemies[j];
+          if (!en.alive) continue;
+          en.x += enemyDir * (0.6 + score * 0.002);
+          if (en.x < 10 || en.x + en.w > W - 10) hitEdge = true;
+        }
+        if (hitEdge) {
+          enemyDir *= -1;
+          for (var k = 0; k < enemies.length; k++) {
+            if (enemies[k].alive) enemies[k].y += 16;
+          }
+        }
+
+        // 적 발사 (가끔)
+        if (tick % 45 === 0) {
+          var alive = enemies.filter(function (e2) { return e2.alive; });
+          if (alive.length) {
+            var shooter = alive[Math.floor(Math.random() * alive.length)];
+            enemyBullets.push({ x: shooter.x + shooter.w / 2 - 2, y: shooter.y + shooter.h, w: 4, h: 10, speed: 3.5 });
+          }
+        }
+        for (var b = enemyBullets.length - 1; b >= 0; b--) {
+          enemyBullets[b].y += enemyBullets[b].speed;
+          if (enemyBullets[b].y > H) enemyBullets.splice(b, 1);
+        }
+
+        // 충돌: 내 총알 vs 적
+        for (var bi = bullets.length - 1; bi >= 0; bi--) {
+          for (var ei = 0; ei < enemies.length; ei++) {
+            var e3 = enemies[ei];
+            if (e3.alive && rectsHit(bullets[bi], e3)) {
+              e3.alive = false;
+              bullets.splice(bi, 1);
+              score += 10;
+              scoreEl.textContent = score;
+              break;
+            }
+          }
+        }
+
+        // 적 전멸하면 다음 웨이브
+        if (enemies.every(function (e4) { return !e4.alive; })) {
+          enemies = [];
+          spawnWave();
+        }
+
+        // 충돌: 적 총알 vs 플레이어 / 적이 바닥까지 내려옴 → 게임 오버
+        for (var eb = 0; eb < enemyBullets.length; eb++) {
+          if (rectsHit(enemyBullets[eb], player)) { endGame(); return; }
+        }
+        for (var ee = 0; ee < enemies.length; ee++) {
+          if (enemies[ee].alive && enemies[ee].y + enemies[ee].h >= player.y) { endGame(); return; }
+        }
+      }
+
+      function draw() {
+        ctx.fillStyle = "#0b1020";
+        ctx.fillRect(0, 0, W, H);
+
+        // 별 배경
+        ctx.fillStyle = "rgba(255,255,255,0.5)";
+        for (var s = 0; s < 40; s++) {
+          var sx = (s * 97) % W;
+          var sy = ((s * 53) + tick) % H;
+          ctx.fillRect(sx, sy, 2, 2);
+        }
+
+        // 플레이어 (삼각 우주선)
+        ctx.fillStyle = "#7c9cff";
+        ctx.beginPath();
+        ctx.moveTo(player.x, player.y - player.h / 2);
+        ctx.lineTo(player.x - player.w / 2, player.y + player.h / 2);
+        ctx.lineTo(player.x + player.w / 2, player.y + player.h / 2);
+        ctx.closePath();
+        ctx.fill();
+
+        // 내 총알
+        ctx.fillStyle = "#ffffff";
+        bullets.forEach(function (b) { ctx.fillRect(b.x, b.y, b.w, b.h); });
+
+        // 적
+        enemies.forEach(function (e) {
+          if (!e.alive) return;
+          ctx.fillStyle = "#ff6b8b";
+          ctx.fillRect(e.x, e.y, e.w, e.h);
+          ctx.fillStyle = "#ffd36b";
+          ctx.fillRect(e.x + 6, e.y + 6, 6, 6);
+          ctx.fillRect(e.x + e.w - 12, e.y + 6, 6, 6);
+        });
+
+        // 적 총알
+        ctx.fillStyle = "#ffd36b";
+        enemyBullets.forEach(function (b) { ctx.fillRect(b.x, b.y, b.w, b.h); });
+      }
+
+      function loop() {
+        if (!running) return;
+        if (!paused && !over) { update(); draw(); }
+        requestAnimationFrame(loop);
+      }
+
+      function startGame() {
+        reset();
+        running = true; paused = false;
+        startBtn.textContent = "다시 시작";
+        pauseBtn.disabled = false;
+        pauseBtn.textContent = "일시정지";
+        setState("");
+        requestAnimationFrame(loop);
+      }
+
+      function togglePause() {
+        if (!running || over) return;
+        paused = !paused;
+        pauseBtn.textContent = paused ? "계속하기" : "일시정지";
+        setState(paused ? "일시정지됨" : "");
+      }
+
+      function endGame() {
+        over = true;
+        running = false;
+        pauseBtn.disabled = true;
+        if (score > best) {
+          best = score;
+          localStorage.setItem(BEST_KEY, String(best));
+          bestEl.textContent = best;
+          setState("게임 오버 — 최고 점수 경신!");
+        } else {
+          setState("게임 오버");
+        }
+        startBtn.textContent = "다시 시작";
+      }
+
+      startBtn.addEventListener("click", startGame);
+      pauseBtn.addEventListener("click", togglePause);
+
+      // 시작 전 안내 화면 한 번 그리기
+      reset();
+      draw();
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.font = "bold 20px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("게임 시작을 눌러 주세요", W / 2, H / 2);
+      ctx.textAlign = "start";
+    })();
+  </script>
+</body>
+</html>
