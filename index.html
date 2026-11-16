@@ -130,6 +130,8 @@
       color:var(--text); padding:12px 14px; font:inherit;
     }
     .gb-field input:focus-visible{ outline:3px solid #fff; outline-offset:2px; }
+    .gb-count{ justify-self:end; color:var(--muted); font-size:.85rem; font-weight:600; }
+    .gb-count.is-max{ color:var(--accent-dark); font-weight:800; }
     #gb-submit{ justify-self:start; border:none; cursor:pointer; }
     #gb-submit:disabled{ opacity:.6; cursor:progress; }
 
@@ -303,11 +305,13 @@
           <label for="gb-nickname">별명 <span class="gb-hint">(2~12자)</span></label>
           <input id="gb-nickname" name="nickname" type="text" maxlength="12"
                  autocomplete="off" required aria-describedby="gb-status">
+          <span id="gb-nick-count" class="gb-count" aria-hidden="true">0 / 12</span>
         </div>
         <div class="gb-field">
           <label for="gb-message">응원 메시지 <span class="gb-hint">(1~100자)</span></label>
           <input id="gb-message" name="message" type="text" maxlength="100"
                  autocomplete="off" required aria-describedby="gb-status">
+          <span id="gb-msg-count" class="gb-count" aria-hidden="true">0 / 100</span>
         </div>
         <button id="gb-submit" class="button" type="submit">남기기</button>
       </form>
@@ -338,6 +342,23 @@
       var btn = document.getElementById("gb-submit");
       var statusEl = document.getElementById("gb-status");
       var listEl = document.getElementById("gb-list");
+      var nickCountEl = document.getElementById("gb-nick-count");
+      var msgCountEl = document.getElementById("gb-msg-count");
+
+      // 입력칸 아래 글자 수 표시 ("3 / 12" 형태). 입력 그대로(value.length) 센다.
+      // 한도(max)에 닿으면 is-max 클래스로 색을 바꾼다.
+      function updateCount(inputEl, countEl, max) {
+        var n = inputEl.value.length;
+        countEl.textContent = n + " / " + max;
+        if (n >= max) countEl.classList.add("is-max");
+        else countEl.classList.remove("is-max");
+      }
+      function updateCounts() {
+        updateCount(nickEl, nickCountEl, NICK_MAX);
+        updateCount(msgEl, msgCountEl, MSG_MAX);
+      }
+      nickEl.addEventListener("input", updateCounts);
+      msgEl.addEventListener("input", updateCounts);
 
       function setStatus(text, kind) {
         statusEl.textContent = text;              // textContent 로만 표시
@@ -475,6 +496,7 @@
             // 성공: 방금 저장된 글(서버 응답)을 강조 대상으로 삼아 새로고침 없이 바로 보이게 한다
             setStatus("응원 고마워요!", "ok");
             form.reset();
+            updateCounts();                     // 비워진 입력칸에 맞춰 "0 / 12", "0 / 100" 으로 되돌림
             var justKey = (r.body && r.body.entry) ? entryKey(r.body.entry) : "";
             loadEntries(justKey);
           })
@@ -486,6 +508,7 @@
           });
       });
 
+      updateCounts();                           // 페이지 로드 시 초기값 "0 / 12", "0 / 100"
       loadEntries();
     })();
   </script>
